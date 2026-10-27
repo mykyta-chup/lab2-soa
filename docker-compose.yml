@@ -1,0 +1,127 @@
+services:
+  consul:
+    image: hashicorp/consul:1.21
+    container_name: consul
+    command: agent -dev -client=0.0.0.0 -ui
+    ports:
+      - "8500:8500"
+    healthcheck:
+      test: ["CMD", "consul", "members"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+    networks:
+      - appnet
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: mykyta
+      RABBITMQ_DEFAULT_PASS: mykyta
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 15s
+    networks:
+      - appnet
+
+  auth-service:
+    build: ./auth-service
+    environment:
+      CONSUL_HOST: consul
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_USER: mykyta
+      RABBITMQ_PASS: mykyta
+      RABBITMQ_QUEUE: game_events
+      SERVICE_NAME: auth-service
+      SERVICE_PORT: "8001"
+    depends_on:
+      consul:
+        condition: service_healthy
+    networks:
+      - appnet
+
+  metadata-service:
+    build: ./metadata-service
+    environment:
+      CONSUL_HOST: consul
+      SERVICE_NAME: metadata-service
+      SERVICE_PORT: "8002"
+    depends_on:
+      consul:
+        condition: service_healthy
+    networks:
+      - appnet
+
+  library-service:
+    build: ./library-service
+    environment:
+      CONSUL_HOST: consul
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_USER: mykyta
+      RABBITMQ_PASS: mykyta
+      RABBITMQ_QUEUE: game_events
+      SERVICE_NAME: library-service
+      SERVICE_PORT: "8003"
+    depends_on:
+      consul:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - appnet
+
+  rating-service:
+    build: ./rating-service
+    environment:
+      CONSUL_HOST: consul
+      SERVICE_NAME: rating-service
+      SERVICE_PORT: "8004"
+    depends_on:
+      consul:
+        condition: service_healthy
+    networks:
+      - appnet
+
+  analytics-service:
+    build: ./analytics-service
+    environment:
+      CONSUL_HOST: consul
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_USER: mykyta
+      RABBITMQ_PASS: mykyta
+      RABBITMQ_QUEUE: game_events
+      SERVICE_NAME: analytics-service
+      SERVICE_PORT: "8005"
+    depends_on:
+      consul:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - appnet
+
+  api-gateway:
+    build: ./api-gateway
+    ports:
+      - "8000:8000"
+    environment:
+      CONSUL_HOST: consul
+      SERVICE_NAME: api-gateway
+      SERVICE_PORT: "8000"
+    depends_on:
+      consul:
+        condition: service_healthy
+    networks:
+      - appnet
+
+networks:
+  appnet:
+    driver: bridge
